@@ -1,0 +1,70 @@
+# Configurația Animal Watch. install.sh o copiază în config.yaml (care nu intră în git).
+# Modificările la config.yaml se aplică după repornire:
+#   launchctl kickstart -k gui/$(id -u)/ro.local.animalwatch
+# (zonele salvate din pagina web se aplică imediat, fără repornire).
+
+detection:
+  model: yolo11s.pt          # yolo11s.pt (implicit), yolo11n.pt (mai ușor), yolov8s.pt
+  device: mps                # mps = GPU-ul Apple Silicon; cade automat pe cpu dacă mps nu e disponibil
+  fps_per_camera: 1.5        # câte cadre/secundă analizăm per cameră
+  imgsz: 640                 # rezoluția de inferență
+  min_confidence: 0.45       # prag implicit de încredere
+  class_confidence:          # praguri per clasă (suprascriu min_confidence)
+    bird: 0.60               # păsările dau multe alarme false: prag mai mare
+    cat: 0.40
+    dog: 0.40
+  min_box_area: 0.003        # suprafața minimă a box-ului, ca fracție din cadru (0.003 = 0.3%)
+  confirm_frames: 3          # detecția trebuie să apară în N cadre analizate consecutive
+  cooldown_seconds: 300      # după o alertă, aceeași clasă pe aceeași cameră e ignorată X secunde
+  # Toate clasele de animale din COCO. Șterge ce nu te interesează (ex. bird).
+  classes: [bird, cat, dog, horse, sheep, cow, elephant, bear, zebra, giraffe]
+
+autotune:                    # ajustează FPS-ul (și opțional modelul) dacă Mac-ul e încărcat
+  enabled: true
+  max_cpu_percent: 70        # CPU total al sistemului peste care reducem FPS-ul
+  min_fps: 0.5
+  allow_model_downgrade: true  # dacă și la min_fps e prea încărcat, trece pe yolo11n
+
+notifications:
+  enabled: true
+  priority: 4                # 1..5 (5 = urgent)
+  class_priority: {bear: 5}
+  use_main_stream: true      # poza din notificare e luată din main stream (calitate mai bună)
+  jpeg_max_bytes: 900000     # sub 1 MB
+  max_width: 1920
+  quiet_hours:
+    enabled: false
+    start: "23:00"
+    end: "06:00"
+    save_events: true        # în orele de liniște evenimentele se salvează, dar nu se trimit
+
+species:                     # identificare specie cu un model vizual local prin Ollama (opțional)
+  enabled: auto              # auto = folosește Ollama dacă rulează; true / false
+  ollama_url: http://127.0.0.1:11434
+  model: qwen2.5vl:7b
+  timeout_seconds: 60
+  prompt: "Ce animal e în chenar? Răspunde cu specia în română, un cuvânt sau două."
+
+storage:
+  events_dir: events
+  retention_days: 30
+
+web:
+  host: 127.0.0.1            # doar local; nu schimba în 0.0.0.0
+  port: 8765
+
+power:
+  caffeinate: false          # true = Mac-ul nu adoarme cât rulează aplicația și e în priză (vezi scripts/power.sh)
+
+# Camerele. channel = numărul canalului pe DVR (1..8).
+# zones = listă de poligoane cu coordonate normalizate (0..1). Listă goală = tot cadrul contează.
+# anchor = ce punct al box-ului trebuie să fie în zonă: bottom (baza, recomandat) sau center.
+cameras:
+  - {channel: 1, name: "Camera 1", enabled: true, anchor: bottom, zones: []}
+  - {channel: 2, name: "Camera 2", enabled: true, anchor: bottom, zones: []}
+  - {channel: 3, name: "Camera 3", enabled: true, anchor: bottom, zones: []}
+  - {channel: 4, name: "Camera 4", enabled: true, anchor: bottom, zones: []}
+  - {channel: 5, name: "Camera 5", enabled: true, anchor: bottom, zones: []}
+  - {channel: 6, name: "Camera 6", enabled: true, anchor: bottom, zones: []}
+  - {channel: 7, name: "Camera 7", enabled: false, anchor: bottom, zones: []}
+  - {channel: 8, name: "Camera 8", enabled: false, anchor: bottom, zones: []}

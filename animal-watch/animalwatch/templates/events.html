@@ -1,0 +1,45 @@
+<!doctype html><html lang="ro"><head><title>Animal Watch – evenimente</title>{% include "_head.html" %}
+<style>
+.filters{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+.ev{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.ev img{width:100%;aspect-ratio:16/9;object-fit:contain;display:block;background:#000}
+.ev .m{padding:8px 12px}.ev .t{font-weight:600}
+#status{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin-bottom:14px;font-size:13px}
+#status span{margin-right:14px;white-space:nowrap}
+</style></head><body>
+<header><b>🐾 Animal Watch</b><a class="on" href="/">Evenimente</a><a href="/zones">Zone</a>
+<span style="flex:1"></span><button onclick="testNotify(this)">Trimite notificare de test</button></header>
+<main>
+<div id="status" class="muted">Se încarcă starea…</div>
+<form class="filters" method="get">
+  <select name="camera" onchange="this.form.submit()"><option value="">Toate camerele</option>
+  {% for c in cameras %}<option value="{{c.channel}}" {% if camera==c.channel %}selected{% endif %}>{{c.name}}</option>{% endfor %}</select>
+  <select name="animal" onchange="this.form.submit()"><option value="">Toate animalele</option>
+  {% for f in facets.classes %}<option value="{{f.cls}}" {% if animal==f.cls %}selected{% endif %}>{{ro(f.cls)}} ({{f.n}})</option>{% endfor %}
+  {% for f in facets.species %}<option value="{{f.species}}" {% if animal==f.species %}selected{% endif %}>specie: {{f.species}} ({{f.n}})</option>{% endfor %}</select>
+  <input type="date" name="day" value="{{day or ''}}" onchange="this.form.submit()">
+  <a href="/" class="muted">resetează</a><span class="muted">{{facets.total}} evenimente în total</span>
+</form>
+{% if not rows %}<p class="muted">Niciun eveniment{% if camera or animal or day %} pentru filtrele alese{% endif %}.</p>{% endif %}
+<div class="grid">
+{% for r in rows %}<div class="ev"><a href="/events/{{r.image}}" target="_blank"><img loading="lazy" src="/events/{{r.image}}" alt=""></a>
+<div class="m"><div class="t">{{r.species or r.cls_ro}} <span class="pill">{{(r.confidence*100)|round|int}}%</span>
+{% if r.notified %}<span class="pill" title="notificare trimisă">📲</span>{% endif %}</div>
+<div class="muted">{{r.ts.replace('T',' ')}} · {{r.camera_name}}{% if r.species %} · YOLO: {{r.cls_ro}}{% endif %}</div></div></div>{% endfor %}
+</div>
+{% set q = "camera=" ~ (camera or "") ~ "&animal=" ~ ((animal or "")|urlencode) ~ "&day=" ~ (day or "") %}
+<p>{% if page>1 %}<a href="?{{q}}&page={{page-1}}">← mai noi</a>{% endif %}
+{% if rows|length==60 %} <a href="?{{q}}&page={{page+1}}">mai vechi →</a>{% endif %}</p>
+</main>
+<script>
+async function testNotify(b){b.disabled=true;const r=await fetch('/api/test-notify',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+const j=await r.json();b.textContent=j.ok?'Trimisă ✓':'Eroare – vezi logs/';setTimeout(()=>{b.disabled=false;b.textContent='Trimite notificare de test'},4000)}
+async function status(){const el=document.getElementById('status');try{const j=await (await fetch('/api/status')).json();
+if(!j.running){el.textContent='Serviciul de detecție nu rulează în acest proces (doar istoric).';return}
+const p=j.perf||{};let h=`<span>Model: <b>${p.model||'…'}</b> pe <b>${p.device||'…'}</b></span><span>FPS/cameră: ${p.fps_per_camera??'…'}</span><span>inferență: ${p.infer_ms??'…'} ms</span><span>CPU sistem: ${p.system_cpu??'…'}%</span><span>CPU proces: ${p.process_cpu??'…'}%</span><span>Specie (Ollama): ${j.species_enabled?'da':'nu'}</span><br>`;
+for(const c of j.cameras){if(!c.enabled){h+=`<span class="muted">${c.name}: oprită</span>`;continue}
+h+=`<span class="${c.healthy?'ok':'bad'}">● ${c.name}${c.healthy?'':' – '+(c.error||'fără imagine')}</span>`}
+el.innerHTML=h;el.classList.remove('muted')}catch(e){el.textContent='Stare indisponibilă'}}
+status();setInterval(status,10000);
+</script></body></html>

@@ -1,0 +1,10 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+*.pt
+events/
+logs/
+snapshots_setup/
+tests/images/
+config.yaml

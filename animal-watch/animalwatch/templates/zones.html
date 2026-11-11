@@ -1,0 +1,48 @@
+<!doctype html><html lang="ro"><head><title>Animal Watch – zone</title>{% include "_head.html" %}
+<style>
+.bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+#wrap{position:relative;display:inline-block;max-width:100%;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:#000}
+#img{display:block;max-width:100%;max-height:75vh;user-select:none}
+#cv{position:absolute;inset:0;width:100%;height:100%;cursor:crosshair}
+ol{margin:6px 0 0 18px;padding:0}
+</style></head><body>
+<header><b>🐾 Animal Watch</b><a href="/">Evenimente</a><a class="on" href="/zones">Zone</a></header>
+<main>
+<div class="bar">
+  <select id="cam">{% for c in cameras %}<option value="{{c.channel}}">{{c.name}} (canal {{c.channel}}){% if not c.enabled %} – oprită{% endif %}</option>{% endfor %}</select>
+  <button onclick="loadImg(true)">Imagine live</button>
+  <label>Punct verificat: <select id="anchor"><option value="bottom">baza box-ului (picioarele)</option><option value="center">centrul box-ului</option></select></label>
+  <button onclick="finishPoly()">Închide poligonul (Enter)</button>
+  <button onclick="undo()">Anulează punct (Backspace)</button>
+  <button onclick="clearAll()">Șterge toate zonele</button>
+  <button class="pri" onclick="save()">Salvează</button>
+  <span id="msg" class="muted"></span>
+</div>
+<p class="muted">Click pe imagine = adaugă punct. Dublu-click sau Enter = închide poligonul. Poți desena mai multe zone. Fără nicio zonă = tot cadrul contează. Click dreapta pe o zonă = o șterge.</p>
+<div id="wrap"><img id="img" alt=""><canvas id="cv"></canvas></div>
+</main>
+<script>
+let cams=[],zones=[],cur=[];const img=document.getElementById('img'),cv=document.getElementById('cv'),ctx=cv.getContext('2d'),sel=document.getElementById('cam'),msg=document.getElementById('msg');
+function camData(){return cams.find(c=>c.channel==sel.value)}
+function loadImg(live){img.src=`/api/snapshot/${sel.value}.jpg?${live?'live=1&':''}t=${Date.now()}`}
+function loadCam(){const c=camData();zones=JSON.parse(JSON.stringify(c.zones||[]));cur=[];document.getElementById('anchor').value=c.anchor||'bottom';loadImg(false);msg.textContent=''}
+function resize(){cv.width=img.clientWidth;cv.height=img.clientHeight;draw()}
+img.onload=resize;window.onresize=resize;
+function draw(){const W=cv.width,H=cv.height;ctx.clearRect(0,0,W,H);
+ const poly=(pts,fill,stroke,close)=>{if(!pts.length)return;ctx.beginPath();pts.forEach(([x,y],i)=>i?ctx.lineTo(x*W,y*H):ctx.moveTo(x*W,y*H));if(close)ctx.closePath();
+  if(fill){ctx.fillStyle=fill;ctx.fill()}ctx.lineWidth=2;ctx.strokeStyle=stroke;ctx.stroke();pts.forEach(([x,y])=>{ctx.beginPath();ctx.arc(x*W,y*H,4,0,7);ctx.fillStyle=stroke;ctx.fill()})};
+ zones.forEach(z=>poly(z,'rgba(60,200,110,.25)','#3cc86e',true));poly(cur,null,'#ffcc00',false)}
+function pt(e){const r=cv.getBoundingClientRect();return[+((e.clientX-r.left)/r.width).toFixed(4),+((e.clientY-r.top)/r.height).toFixed(4)]}
+cv.addEventListener('click',e=>{if(e.detail>1)return;cur.push(pt(e));draw()});
+cv.addEventListener('dblclick',e=>{finishPoly()});
+cv.addEventListener('contextmenu',e=>{e.preventDefault();const [x,y]=pt(e);const i=zones.findIndex(z=>inside(x,y,z));if(i>=0){zones.splice(i,1);draw()}});
+document.addEventListener('keydown',e=>{if(e.target.tagName==='SELECT')return;if(e.key==='Enter')finishPoly();if(e.key==='Backspace'){e.preventDefault();undo()}if(e.key==='Escape'){cur=[];draw()}});
+function inside(x,y,p){let c=false;for(let i=0,j=p.length-1;i<p.length;j=i++){const[xi,yi]=p[i],[xj,yj]=p[j];if((yi>y)!=(yj>y)&&x<(xj-xi)*(y-yi)/(yj-yi)+xi)c=!c}return c}
+function finishPoly(){if(cur.length>=3){zones.push(cur);cur=[];draw();msg.textContent='Nesalvat'}else if(cur.length){msg.textContent='Un poligon are nevoie de minim 3 puncte'}}
+function undo(){if(cur.length)cur.pop();else zones.pop();draw()}
+function clearAll(){zones=[];cur=[];draw();msg.textContent='Nesalvat'}
+async function save(){finishPoly();const r=await fetch(`/api/zones/${sel.value}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({zones,anchor:document.getElementById('anchor').value})});
+ const j=await r.json();if(j.ok){camData().zones=j.zones;camData().anchor=document.getElementById('anchor').value;msg.textContent='Salvat în config.yaml ✓'}else msg.textContent='Eroare: '+(j.error||r.status)}
+sel.onchange=loadCam;
+fetch('/api/cameras').then(r=>r.json()).then(j=>{cams=j;loadCam()});
+</script></body></html>
